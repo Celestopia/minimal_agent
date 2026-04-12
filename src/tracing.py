@@ -68,9 +68,10 @@ def render_trace(trace_path: str | Path) -> str:
                     lines.extend(
                         f"    {line}" for line in payload["system_prompt"].splitlines()
                     )
+                    lines.append("")
+                    lines.append("-" * 120)
+                    lines.append("")
             elif event_type == "turn_started":
-                lines.append("-" * 80)
-                lines.append("")
                 lines.append(f"  Turn: {payload['turn_number']}")
                 lines.append(f"  User message: {payload['user_message']}")
                 if payload.get("user_prompt"):
@@ -147,6 +148,9 @@ def render_trace(trace_path: str | Path) -> str:
                     lines.append(f"  Turn: {payload['turn_number']}")
                 lines.append(f"  Stop reason: {payload['stop_reason']}")
                 lines.append(f"  Assistant message: {payload['assistant_message']}")
+                lines.append("")
+                lines.append("-" * 120)
+                lines.append("")
             else:
                 lines.append(f"  Payload: {payload}")
 
