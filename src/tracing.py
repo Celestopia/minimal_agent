@@ -64,6 +64,11 @@ def render_trace(trace_path: str | Path) -> str:
 
             if event_type == "session_started":
                 lines.append(f"  Session: {payload['session_id']}")
+                if payload.get("system_prompt"):
+                    lines.append("  System prompt:")
+                    lines.extend(
+                        f"    {line}" for line in payload["system_prompt"].splitlines()
+                    )
             elif event_type == "turn_started":
                 lines.append(f"  Session: {payload['session_id']}")
                 lines.append(f"  Turn: {payload['turn_number']}")

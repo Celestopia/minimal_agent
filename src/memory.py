@@ -36,6 +36,7 @@ class ConversationSession:
     """A durable conversation session that can be resumed later."""
 
     session_id: str
+    system_prompt: str = ""
     created_at: str = field(default_factory=utc_now)
     turns: list[ConversationTurn] = field(default_factory=list)
 
@@ -119,6 +120,7 @@ class SessionStore:
         ]
         return ConversationSession(
             session_id=raw["session_id"],
+            system_prompt=raw.get("system_prompt", ""),
             created_at=raw.get("created_at", utc_now()),
             turns=turns,
         )
@@ -129,6 +131,7 @@ class SessionStore:
         path = self.session_path(session.session_id)
         payload: dict[str, Any] = {
             "session_id": session.session_id,
+            "system_prompt": session.system_prompt,
             "created_at": session.created_at,
             "turns": [asdict(turn) for turn in session.turns],
         }

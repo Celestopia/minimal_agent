@@ -26,13 +26,25 @@ class ReActAgent:
     def load_or_create_session(self, session_id: str | None = None) -> ConversationSession:
         """Load one persisted session or create a fresh session."""
 
-        return self.session_store.load_or_create(session_id)
+        session = self.session_store.load_or_create(session_id)
+        if not session.system_prompt:
+            session.system_prompt = self._render_system_prompt()
+            self.session_store.save(session)
+        return session
 
     def _tool_descriptions(self) -> str:
         """Render the tool section injected into the system prompt."""
 
         return "\n".join(
             f"- {tool.name}: {tool.description}" for tool in self.tools.values()
+        )
+
+    def _render_system_prompt(self) -> str:
+        """Render the invariant system prompt used for a session."""
+
+        return self.prompts.render_system_prompt(
+            tool_descriptions=self._tool_descriptions(),
+            tool_names=", ".join(self.tools.keys()),
         )
 
     def _stop_message(self, reason: str) -> str:
@@ -59,11 +71,9 @@ class ReActAgent:
            user-side observation messages.
         """
 
-        system_prompt = self.prompts.render_system_prompt(
-            tool_descriptions=self._tool_descriptions(),
-            tool_names=", ".join(self.tools.keys()),
-        )
-        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": session.system_prompt}
+        ]
         messages.extend(
             session.to_message_history(self.config.agent.sliding_window_turns)
         )
@@ -84,7 +94,13 @@ class ReActAgent:
             session_id=session.session_id,
         )
         if not trace.trace_path.exists():
-            trace.log("session_started", {"session_id": session.session_id})
+            trace.log(
+                "session_started",
+                {
+                    "session_id": session.session_id,
+                    "system_prompt": session.system_prompt,
+                },
+            )
         trace.log(
             "turn_started",
             {

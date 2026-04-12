@@ -10,7 +10,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from config import load_agent_config
-from memory import ConversationSession
+from memory import ConversationSession, SessionStore
 from parser import parse_react_output
 from tools import run_calculator
 from tracing import TraceLogger, render_trace
@@ -84,6 +84,17 @@ class MemoryTests(unittest.TestCase):
             ],
         )
 
+    def test_session_store_persists_system_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            store = SessionStore(Path(tmp_dir))
+            session = ConversationSession(
+                session_id="demo",
+                system_prompt="You are the system prompt.",
+            )
+            store.save(session)
+            loaded = store.load_or_create("demo")
+            self.assertEqual(loaded.system_prompt, "You are the system prompt.")
+
 
 class ConfigAndTraceTests(unittest.TestCase):
     """Verify config loading and trace formatting helpers."""
@@ -99,6 +110,7 @@ class ConfigAndTraceTests(unittest.TestCase):
             trace_path.write_text(
                 "\n".join(
                     [
+                        '{"timestamp":"2026-01-01T00:00:00+00:00","event_type":"session_started","payload":{"session_id":"demo","system_prompt":"You are the system prompt."}}',
                         '{"timestamp":"2026-01-01T00:00:00+00:00","event_type":"turn_started","payload":{"session_id":"demo","turn_number":1,"user_message":"hello"}}',
                         '{"timestamp":"2026-01-01T00:00:01+00:00","event_type":"turn_finished","payload":{"stop_reason":"final_answer","assistant_message":"hi"}}',
                     ]
@@ -108,6 +120,8 @@ class ConfigAndTraceTests(unittest.TestCase):
             )
             rendered = render_trace(trace_path)
             self.assertIn("Trace Report", rendered)
+            self.assertIn("System prompt:", rendered)
+            self.assertIn("You are the system prompt.", rendered)
             self.assertIn("turn_started", rendered)
             self.assertIn("Assistant message: hi", rendered)
 
