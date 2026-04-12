@@ -1,0 +1,28 @@
+llm:
+  api_key_file: keys.cfg
+  api_key_field: DEEPSEEK_API_KEY
+  base_url: https://api.deepseek.com
+  model: deepseek-chat
+  temperature: 0.0
+  timeout_seconds: 90
+
+agent:
+  max_steps_per_query: 10
+  max_repeated_failures: 5
+  sliding_window_turns: 6
+
+paths:
+  prompt_dir: prompts
+  trace_dir: traces
+  session_dir: sessions
+
+tools:
+  calculator:
+    enabled: true
+  python:
+    enabled: true
+    docker_image: python:3.11-slim
+    timeout_seconds: 15
+    memory_limit: 256m
+    cpu_limit: 1.0
+    pids_limit: 64

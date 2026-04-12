@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# API key
+keys.cfg
+
+# Running artifacts
+traces/*.jsonl
+sessions/*.json
+
+# IDE files
+.vscode/
+.codex/
+.codex
+
+# Temporary files
+tmp/
+
+# Documentation files
+doc/

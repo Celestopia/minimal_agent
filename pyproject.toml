@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minimal-react-agent"
+version = "0.1.0"
+description = "A local CLI ReAct agent for small coding tasks with DeepSeek, Docker-backed Python execution, and detailed tracing."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "openai>=1.30.0",
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+minimal-agent = "cli:main"
+
+[tool.setuptools]
+py-modules = [
+  "agent",
+  "cli",
+  "config",
+  "llm",
+  "memory",
+  "parser",
+  "prompts",
+  "tracing",
+]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
