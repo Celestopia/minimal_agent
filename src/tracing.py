@@ -21,8 +21,7 @@ def trace_timestamp() -> str:
 
 @dataclass(slots=True)
 class TraceLogger:
-    """Append-only JSONL trace logger for one session.
-    """
+    """Append-only JSONL trace logger for one session."""
 
     trace_path: Path
 
@@ -70,7 +69,8 @@ def render_trace(trace_path: str | Path) -> str:
                         f"    {line}" for line in payload["system_prompt"].splitlines()
                     )
             elif event_type == "turn_started":
-                lines.append(f"  Session: {payload['session_id']}")
+                lines.append("-" * 80)
+                lines.append("")
                 lines.append(f"  Turn: {payload['turn_number']}")
                 lines.append(f"  User message: {payload['user_message']}")
                 if payload.get("user_prompt"):
