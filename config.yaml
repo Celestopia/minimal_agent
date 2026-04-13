@@ -12,7 +12,6 @@ agent:
   sliding_window_turns: 6
 
 paths:
-  prompt_dir: prompts
   trace_dir: traces
   session_dir: sessions
 

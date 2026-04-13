@@ -16,11 +16,23 @@ class ToolResult:
     """Normalized tool execution result."""
 
     tool_name: str
-    tool_input: str
+    tool_input: dict[str, Any]
     success: bool
     output_text: str
     error_text: str = ""
     metadata: dict[str, Any] | None = None
+
+    def to_observation_payload(self) -> dict[str, Any]:
+        """Return a structured observation payload for the next model step."""
+
+        return {
+            "tool_name": self.tool_name,
+            "tool_input": self.tool_input,
+            "success": self.success,
+            "output_text": self.output_text,
+            "error_text": self.error_text,
+            "metadata": self.metadata or {},
+        }
 
     def to_observation(self) -> str:
         """Convert the result into the plain-text observation fed back to ReAct."""
@@ -43,9 +55,10 @@ class Tool:
 
     name: str
     description: str
-    runner: Callable[[str], ToolResult]
+    parameters_schema: dict[str, Any]
+    runner: Callable[[dict[str, Any]], ToolResult]
 
-    def run(self, tool_input: str) -> ToolResult:
+    def run(self, tool_input: dict[str, Any]) -> ToolResult:
         """Execute the underlying tool."""
 
         return self.runner(tool_input)

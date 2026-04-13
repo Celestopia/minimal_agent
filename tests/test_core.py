@@ -17,42 +17,61 @@ from tracing import TraceLogger, render_trace
 
 
 class ParserTests(unittest.TestCase):
-    """Verify the explicit ReAct format parser."""
+    """Verify the JSON-only ReAct parser."""
 
-    def test_parse_action_block(self) -> None:
+    def test_parse_tool_call_step(self) -> None:
         raw = (
-            "Thought: I should verify the math.\n"
-            "Thought Summary: Use calculator.\n"
-            "Action: calculator\n"
-            "Action Input:\n"
-            "sqrt(81) + 2"
+            '{"thought":"I should verify the math exactly.",'
+            '"thought_summary":"Use calculator.",'
+            '"action":"calculator",'
+            '"action_input":{"expression":"sqrt(81) + 2"},'
+            '"status":"tool_call",'
+            '"final_answer":null}'
         )
         decision = parse_react_output(raw)
         self.assertFalse(decision.malformed)
+        self.assertEqual(decision.status, "tool_call")
         self.assertEqual(decision.action, "calculator")
-        self.assertEqual(decision.action_input, "sqrt(81) + 2")
+        self.assertEqual(decision.action_input, {"expression": "sqrt(81) + 2"})
 
     def test_parse_final_answer(self) -> None:
         raw = (
-            "Thought: I now know the result.\n"
-            "Thought Summary: Answer directly.\n"
-            "Final Answer: The result is 11."
+            '{"thought":"I now know the result.",'
+            '"thought_summary":"Answer directly.",'
+            '"action":null,'
+            '"action_input":null,'
+            '"status":"final",'
+            '"final_answer":"The result is 11."}'
         )
         decision = parse_react_output(raw)
         self.assertFalse(decision.malformed)
         self.assertEqual(decision.final_answer, "The result is 11.")
+
+    def test_parse_tool_call_requires_action_input_object(self) -> None:
+        raw = (
+            '{"thought":"Need a tool.",'
+            '"thought_summary":"Use tool.",'
+            '"action":"calculator",'
+            '"action_input":null,'
+            '"status":"tool_call",'
+            '"final_answer":null}'
+        )
+        decision = parse_react_output(raw)
+        self.assertTrue(decision.malformed)
+        self.assertIn("action_input", decision.error_message or "")
 
 
 class CalculatorTests(unittest.TestCase):
     """Verify the safe calculator tool."""
 
     def test_calculator_supports_math_functions(self) -> None:
-        result = run_calculator("sqrt(81) + log(e)")
+        result = run_calculator({"expression": "sqrt(81) + log(e)"})
         self.assertTrue(result.success)
         self.assertEqual(result.output_text, "10.0")
+        self.assertEqual(result.tool_input, {"expression": "sqrt(81) + log(e)"})
 
     def test_calculator_rejects_unsafe_names(self) -> None:
-        result = run_calculator("__import__('os').system('echo bad idea')")
+        result = run_calculator({"expression": "__import__('os').system('echo bad idea')"})
         self.assertFalse(result.success)
 
 

@@ -102,12 +102,16 @@ def render_trace(trace_path: str | Path) -> str:
                     lines.append(f"  Turn: {payload['turn_number']}")
                 lines.append(f"  Step: {payload['step_index']}")
                 lines.append(f"  Malformed: {payload['malformed']}")
+                if payload.get("status"):
+                    lines.append(f"  Status: {payload['status']}")
                 if payload.get("thought"):
                     lines.append(f"  Thought: {payload['thought']}")
                 if payload.get("thought_summary"):
                     lines.append(f"  Thought summary: {payload['thought_summary']}")
                 if payload.get("action"):
                     lines.append(f"  Action: {payload['action']}")
+                if payload.get("action_input"):
+                    lines.append(f"  Action input: {payload['action_input']}")
                 if payload.get("final_answer"):
                     lines.append(f"  Final answer: {payload['final_answer']}")
                 if payload.get("error_message"):
@@ -119,7 +123,17 @@ def render_trace(trace_path: str | Path) -> str:
                 lines.append(f"  Tool: {payload['tool_name']}")
                 lines.append(f"  Success: {payload['success']}")
                 lines.append("  Tool input:")
-                lines.extend(f"    {line}" for line in payload["tool_input"].splitlines())
+                tool_input = payload["tool_input"]
+                if isinstance(tool_input, dict):
+                    rendered_tool_input = json.dumps(
+                        tool_input,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        indent=2,
+                    )
+                    lines.extend(f"    {line}" for line in rendered_tool_input.splitlines())
+                else:
+                    lines.extend(f"    {line}" for line in str(tool_input).splitlines())
                 if payload.get("output_text"):
                     lines.append("  Tool output:")
                     lines.extend(f"    {line}" for line in payload["output_text"].splitlines())

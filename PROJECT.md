@@ -9,13 +9,13 @@ Build a simple but readable local AI agent repository for studying agent behavio
 The system is composed of six main layers:
 
 1. `main.py` and `src/cli.py`
-   `main.py` is the direct repository launcher for `python main.py ...`, and `src/cli.py` holds the actual command parsing and runtime dispatch.
+   `main.py` is the direct repository launcher for `python main.py ...`, and `src/cli.py` holds the interactive chat and trace-formatting command parsing and runtime dispatch. The CLI uses `argparse` subparsers so the repository has two command modes: `chat` and `format-trace`.
 
 2. `memory.py`
    Persists conversations to `sessions/` and renders a sliding window of recent turns for prompt context.
 
 3. `prompts.py`
-   Loads prompt templates from the `prompts/` directory and injects runtime values.
+   Stores the prompt definitions and renders them with runtime values.
 
 4. `llm.py`
    Wraps the OpenAI Python SDK configured for DeepSeek's OpenAI-compatible endpoint.
@@ -26,25 +26,40 @@ The system is composed of six main layers:
 6. `src/tools/`
    Hosts the calculator tool, the Docker-backed Python execution tool, and the small registry/base modules that wire those tools into the agent.
 
+## CLI Parsing Rules
+
+The command-line interface is intentionally small and uses subcommands rather than one large flat argument surface.
+
+- `python main.py chat` starts the interactive agent
+- `python main.py chat --session-id demo` or `python main.py chat -S demo` resumes or creates a named session
+- `python main.py format-trace traces/demo.jsonl` renders a trace report
+- `python main.py format-trace traces/demo.jsonl --output report.txt` or `-O report.txt` writes the rendered report to a file
+
+The parsing rules are:
+
+- `--config` is a global optional argument on the top-level parser
+- `chat` and `format-trace` are subcommands created with `argparse` subparsers
+- `trace_path` is positional because it is the main required input of `format-trace`
+- `--session-id` and `--output` are optional named arguments, each with a short alias
+
 ## ReAct Loop
 
 For each user query inside a session, the runtime performs the following loop:
 
-1. Render the system prompt with tool descriptions and the recent conversation window.
-2. Render the user prompt with the current question and scratchpad.
-3. Call the model for exactly one next ReAct step.
-4. Parse the model output into either:
-   - an action request, or
-   - a final answer
-5. If the model requested a tool, execute it and append the resulting observation to the scratchpad.
+1. Render the invariant system prompt and the current-turn user prompt.
+2. Build a full message list containing the system prompt, sliding-window conversation history, the current user turn, and any prior assistant/tool messages for the current question.
+3. Call the model with JSON mode enabled.
+4. Parse the assistant JSON content into `thought`, `thought_summary`, `status`, `action`, `action_input`, and `final_answer`.
+5. If the model requested a tool, execute it from the parsed JSON fields, append the assistant JSON response to the running scratchpad, and then append a user observation message containing the structured tool result for the next step.
 6. If the model returned a final answer, stop the loop and return that answer.
-7. If the model output is malformed or a tool/model call fails, record the failure, append a corrective observation, and let the loop recover.
+7. If the model output is malformed or a tool/model call fails, record the failure, append a corrective user message, and let the loop recover.
 
 ## Conversation State Management
 
 The agent is conversational rather than single-shot. Session state is stored in `sessions/<session-id>.json` and contains:
 
 - session id
+- invariant system prompt
 - creation timestamp
 - ordered list of user/assistant turns
 - trace path for each turn
@@ -53,22 +68,22 @@ Context management uses a simple sliding window, as requested. Only the last `ag
 
 ## Prompt Strategy
 
-Prompt templates are stored as standalone files:
+Prompt definitions are stored in `src/prompts.py`.
 
-- `prompts/system_prompt.txt`
-- `prompts/user_turn_prompt.txt`
+This keeps the protocol close to the rest of the runtime logic, which is a good fit now that the prompt shape is part of the fixed agent design rather than an external template surface.
 
-This keeps experimentation lightweight. You can change instructions, formatting rules, or tool guidance without editing the runtime.
+The system prompt requires a strict JSON-based ReAct schema:
 
-The system prompt requires a strict explicit ReAct schema:
+- `thought`
+- `thought_summary`
+- `action`
+- `action_input`
+- `status`
+- `final_answer`
 
-- `Thought`
-- `Thought Summary`
-- `Action`
-- `Action Input`
-- `Final Answer`
+Actions are parsed from the assistant JSON content itself. This keeps the whole ReAct step in one response channel and avoids relying on provider-specific native tool-call metadata.
 
-The inclusion of both `Thought` and `Thought Summary` matches your requirement to log both detailed reasoning text and a shorter summary.
+The inclusion of both `thought` and `thought_summary` matches your requirement to log both detailed reasoning text and a shorter summary.
 
 ## Tools
 
@@ -98,12 +113,11 @@ Inside the container, common file-opening paths are patched to raise `Permission
 Each session produces one JSONL trace file in `traces/`, and every user turn appends to that file. Important events include:
 
 - turn start
-- system prompt renders when the prompt changes
-- per-step user prompt renders
+- session start with the invariant system prompt
 - raw model response
 - parsed decision
 - tool execution result
-- observation appended to scratchpad
+- tool or corrective observation appended to the running turn state
 - repeated failure counter updates
 - turn finish and stop reason
 
@@ -127,6 +141,7 @@ The loop stops when one of the following occurs:
 Recoverable failures include:
 
 - malformed model output
+- malformed assistant JSON content
 - LLM call errors
 - tool errors
 - unknown tool names
@@ -138,7 +153,7 @@ The repeated-failure counter resets after a successful tool execution.
 All adjustable hyperparameters are stored in `config.yaml`. This includes:
 
 - model settings
-- prompt/session/trace paths
+- session/trace paths
 - sliding-window length
 - maximum steps
 - repeated-failure threshold

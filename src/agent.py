@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from config import AgentConfig
@@ -18,7 +19,7 @@ class ReActAgent:
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
-        self.prompts = PromptRenderer(config.paths.prompt_dir)
+        self.prompts = PromptRenderer()
         self.llm_client = DeepSeekChatClient(config.llm)
         self.session_store = SessionStore(config.paths.session_dir)
         self.tools = build_tool_registry(config.tools)
@@ -35,9 +36,22 @@ class ReActAgent:
     def _tool_descriptions(self) -> str:
         """Render the tool section injected into the system prompt."""
 
-        return "\n".join(
-            f"- {tool.name}: {tool.description}" for tool in self.tools.values()
-        )
+        rendered_lines: list[str] = []
+        for tool in self.tools.values():
+            rendered_lines.append(f"- {tool.name}: {tool.description}")
+            properties = tool.parameters_schema.get("properties", {})
+            if properties:
+                rendered_lines.append("  action_input fields:")
+                for field_name, field_schema in properties.items():
+                    field_type = field_schema.get("type", "any")
+                    field_description = field_schema.get("description", "").strip()
+                    if field_description:
+                        rendered_lines.append(
+                            f"  - {field_name} ({field_type}): {field_description}"
+                        )
+                    else:
+                        rendered_lines.append(f"  - {field_name} ({field_type})")
+        return "\n".join(rendered_lines)
 
     def _render_system_prompt(self) -> str:
         """Render the invariant system prompt used for a session."""
@@ -59,19 +73,19 @@ class ReActAgent:
         self,
         session: ConversationSession,
         user_prompt: str,
-        react_messages: list[dict[str, str]],
-    ) -> list[dict[str, str]]:
+        react_messages: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
         """Build the full chat message list sent to the model.
 
         The message list is structured as:
         1. One invariant system instruction message.
         2. Prior conversational turns as true user/assistant history.
         3. The current turn's user prompt.
-        4. The ongoing ReAct trajectory as alternating assistant outputs and
-           user-side observation messages.
+        4. The ongoing ReAct trajectory as assistant messages, tool result
+           messages, and occasional corrective user messages after failures.
         """
 
-        messages: list[dict[str, str]] = [
+        messages: list[dict[str, object]] = [
             {"role": "system", "content": session.system_prompt}
         ]
         messages.extend(
@@ -85,7 +99,7 @@ class ReActAgent:
         self,
         session: ConversationSession,
         user_message: str,
-    ) -> tuple[str, Path]:
+    ) -> str:
         """Run one ReAct turn, update the session, and return the final answer."""
 
         turn_number = session.next_turn_number
@@ -116,14 +130,20 @@ class ReActAgent:
         )
 
         user_prompt = self.prompts.render_user_prompt(user_message)
-        react_messages: list[dict[str, str]] = []
+        react_messages: list[dict[str, object]] = [] # Transient ReAct scratchpad for the current turn; will not be logged to session history.
         consecutive_failures = 0
         final_answer: str | None = None
         stop_reason = "max_steps_reached"
-
+        
         for step_index in range(1, self.config.agent.max_steps_per_query + 1):
+            # Each iteration asks the model for exactly one next ReAct step.
+            # That step can end in one of three states:
+            # 1. malformed output -> feed back a corrective observation and retry
+            # 2. tool request -> execute the tool, append the observation, and continue
+            # 3. final answer -> stop the loop
             messages = self._build_react_messages(session, user_prompt, react_messages)
 
+            # Request the LLM for a response
             try:
                 model_response = self.llm_client.generate(messages)
             except Exception as exc:
@@ -160,6 +180,7 @@ class ReActAgent:
                 },
             )
 
+            # Parse the model response to decide the next step
             decision = parse_react_output(model_response.text)
             trace.log(
                 "decision_parsed",
@@ -168,6 +189,7 @@ class ReActAgent:
                     "step_index": step_index,
                     "thought": decision.thought,
                     "thought_summary": decision.thought_summary,
+                    "status": decision.status,
                     "action": decision.action,
                     "action_input": decision.action_input,
                     "final_answer": decision.final_answer,
@@ -182,7 +204,6 @@ class ReActAgent:
                     "Invalid response format. "
                     f"{decision.error_message or 'Please follow the protocol exactly.'}"
                 )
-                react_messages.append({"role": "assistant", "content": decision.raw_text})
                 react_messages.append(
                     {
                         "role": "user",
@@ -211,16 +232,18 @@ class ReActAgent:
                     break
                 continue
 
+            # If the final answer is reached, stop the loop.
             if decision.final_answer is not None:
                 final_answer = decision.final_answer
                 stop_reason = "final_answer"
                 break
 
+            # If a tool call is needed, execute the tool and append the observation.
             tool = self.tools.get(decision.action or "")
             if tool is None:
                 result = ToolResult(
                     tool_name=decision.action or "(missing)",
-                    tool_input=decision.action_input or "",
+                    tool_input=decision.action_input or {},
                     success=False,
                     output_text="",
                     error_text=(
@@ -229,7 +252,7 @@ class ReActAgent:
                     ),
                 )
             else:
-                result = tool.run(decision.action_input or "")
+                result = tool.run(decision.action_input or {})
 
             trace.log(
                 "tool_result",
@@ -245,8 +268,14 @@ class ReActAgent:
                 },
             )
 
-            observation = result.to_observation()
-            react_messages.append({"role": "assistant", "content": decision.raw_text})
+            observation_payload = result.to_observation_payload()
+            observation = json.dumps(
+                observation_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+            )
+            react_messages.append({"role": "assistant", "content": model_response.text})
             react_messages.append(
                 {
                     "role": "user",
@@ -262,6 +291,8 @@ class ReActAgent:
                 },
             )
 
+            # If the tool execution is successful, reset the failure counter and proceed;
+            # If the tool execution fails, increment the failure counter and stop if it exceeds the threshold.
             if result.success:
                 consecutive_failures = 0
             else:
@@ -279,6 +310,7 @@ class ReActAgent:
                     stop_reason = "too_many_repeated_failures"
                     break
 
+        # If the loop ends without a final answer, generate a fallback message.
         if final_answer is None:
             if stop_reason == "max_steps_reached":
                 final_answer = self._stop_message(
@@ -291,6 +323,7 @@ class ReActAgent:
             else:
                 final_answer = self._stop_message(stop_reason)
 
+        # Append the final answer of this turn to the session and save it.
         session.append_turn(
             user_message=user_message,
             assistant_message=final_answer,
@@ -308,4 +341,4 @@ class ReActAgent:
             },
         )
 
-        return final_answer, trace.trace_path
+        return final_answer

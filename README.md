@@ -1,23 +1,22 @@
 # Minimal ReAct Agent
 
-This repository is a local testing project for a conversational AI agent focused on small Python coding and debugging tasks. It uses a classic explicit ReAct loop, DeepSeek through the OpenAI-compatible SDK, a Docker-backed `python` tool, a safe `calculator` tool, sliding-window context management, and detailed JSONL trace logging.
+This repository is a local testing project for a conversational AI agent focused on small Python coding and debugging tasks. It uses a classic ReAct loop, DeepSeek through the OpenAI-compatible SDK, JSON-mode assistant outputs for both reasoning and tool decisions, a Docker-backed `python` tool, a safe `calculator` tool, sliding-window context management, and detailed JSONL trace logging.
 
 ## Features
 
 - Conversational CLI agent with persistent session history
 - Sliding-window context management across turns
-- Classic explicit ReAct protocol with `Thought`, `Thought Summary`, `Action`, `Action Input`, and `Final Answer`
+- JSON-based ReAct protocol with full `thought`, `thought_summary`, `action`, `action_input`, and `final_answer`
 - Docker-isolated Python execution with no network and no host file access
 - Calculator tool with arithmetic and math functions such as `sqrt`, `sin`, and `log`
 - Detailed per-session JSONL traces plus a formatter for human-readable replay
 - YAML-based configuration for model settings and stopping thresholds
-- Prompt templates stored as editable standalone files
+- Prompt definitions kept in `src/prompts.py`
 
 ## Repository Layout
 
 - `config.yaml`: adjustable runtime configuration
 - `keys.cfg`: DeepSeek API key file
-- `prompts/`: standalone prompt templates
 - `src/`: implementation modules
 - `tests/`: focused unit tests
 - `traces/`: generated per-session JSONL traces
@@ -61,6 +60,19 @@ This is a good local testing sandbox, but it is not a formally hardened security
 
 ## Usage
 
+The CLI uses `argparse` subcommands. The current command shape is:
+
+```bash
+python main.py [--config CONFIG] {chat,format-trace} ...
+```
+
+Command-specific argument rules:
+
+- `chat` starts the interactive agent session
+- `chat` accepts optional `--session-id` or `-S`
+- `format-trace` requires one positional argument, `trace_path`
+- `format-trace` accepts optional `--output` or `-O`
+
 Start an interactive chat session:
 
 ```bash
@@ -71,12 +83,7 @@ Resume or create a named session:
 
 ```bash
 python main.py chat --session-id study-session
-```
-
-Ask one question non-interactively:
-
-```bash
-python main.py ask --session-id study-session "Write Python to reverse a linked list and explain the idea."
+python main.py chat -S study-session
 ```
 
 Render a JSONL trace into readable text:
@@ -89,6 +96,7 @@ Write the formatted trace to a file:
 
 ```bash
 python main.py format-trace traces/<trace-file>.jsonl --output trace_report.txt
+python main.py format-trace traces/<trace-file>.jsonl -O trace_report.txt
 ```
 
 ## Configuration
@@ -121,5 +129,6 @@ The included tests focus on parsing, config loading, sliding-window memory, calc
 - The final user answer is printed in human-readable form.
 - Each session appends to one JSONL trace file in `traces/<session-id>.jsonl`.
 - Session state is stored in `sessions/<session-id>.json`.
-- Prompt templates can be edited without touching Python code.
+- The session record stores the invariant system prompt used for that session.
+- Prompt definitions live in `src/prompts.py`.
 - The main runtime entrypoint is `python main.py`.

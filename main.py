@@ -1,13 +1,4 @@
-"""Repository entrypoint for direct local execution.
-
-This launcher lets the project run with plain Python commands such as:
-
-    python main.py chat
-    python main.py ask --session-id demo "Write a Fibonacci function."
-
-It avoids requiring `pip install -e .` by adding the local `src/` directory to
-`sys.path` before importing the flat source modules.
-"""
+"""Repository entrypoint for direct local execution."""
 
 from __future__ import annotations
 
@@ -35,4 +26,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

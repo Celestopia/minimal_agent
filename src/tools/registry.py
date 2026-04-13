@@ -24,6 +24,17 @@ def build_tool_registry(config: ToolConfig) -> dict[str, Tool]:
                 "Evaluate one math expression. Supports arithmetic and common "
                 "functions such as sqrt, sin, cos, tan, log, exp, abs, and round."
             ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "A single arithmetic or math expression.",
+                    }
+                },
+                "required": ["expression"],
+                "additionalProperties": False,
+            },
             runner=run_calculator,
         )
 
@@ -40,8 +51,19 @@ def build_tool_registry(config: ToolConfig) -> dict[str, Tool]:
             description=(
                 "Run a short Python snippet inside an isolated Docker container. "
                 "No network and no file read/write access are allowed. "
-                "The full snippet should be passed as Action Input."
+                "Pass the full snippet in the 'code' tool argument."
             ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "A short Python snippet to execute.",
+                    }
+                },
+                "required": ["code"],
+                "additionalProperties": False,
+            },
             runner=executor.run,
         )
 

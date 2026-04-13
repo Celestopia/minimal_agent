@@ -92,22 +92,32 @@ class SafeMathEvaluator(ast.NodeVisitor):
         raise ValueError(f"Unsupported syntax: {type(node).__name__}")
 
 
-def run_calculator(expression: str) -> ToolResult:
+def run_calculator(tool_input: dict[str, object]) -> ToolResult:
     """Evaluate one arithmetic expression with a strict AST whitelist."""
+
+    expression = tool_input.get("expression")
+    if not isinstance(expression, str):
+        return ToolResult(
+            tool_name="calculator",
+            tool_input=tool_input,
+            success=False,
+            output_text="",
+            error_text="Calculator input must contain a string field 'expression'.",
+        )
 
     try:
         tree = ast.parse(expression, mode="eval")
         value = SafeMathEvaluator().visit(tree)
         return ToolResult(
             tool_name="calculator",
-            tool_input=expression,
+            tool_input={"expression": expression},
             success=True,
             output_text=str(value),
         )
     except Exception as exc:
         return ToolResult(
             tool_name="calculator",
-            tool_input=expression,
+            tool_input={"expression": expression},
             success=False,
             output_text="",
             error_text=f"{type(exc).__name__}: {exc}",

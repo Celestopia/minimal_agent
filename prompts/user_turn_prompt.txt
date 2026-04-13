@@ -1,2 +1,0 @@
-Current User Question:
-{user_input}

@@ -1,4 +1,0 @@
-Observation from the previous step:
-{observation}
-
-Produce exactly one next ReAct step for the current question.

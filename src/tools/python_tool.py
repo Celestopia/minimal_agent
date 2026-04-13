@@ -91,13 +91,23 @@ class DockerPythonExecutor:
             wrapper,
         ]
 
-    def run(self, code: str) -> ToolResult:
+    def run(self, tool_input: dict[str, object]) -> ToolResult:
         """Execute one Python snippet and capture stdout, stderr, and exit status."""
+
+        code = tool_input.get("code")
+        if not isinstance(code, str):
+            return ToolResult(
+                tool_name="python",
+                tool_input=tool_input,
+                success=False,
+                output_text="",
+                error_text="Python tool input must contain a string field 'code'.",
+            )
 
         if shutil.which("docker") is None:
             return ToolResult(
                 tool_name="python",
-                tool_input=code,
+                tool_input={"code": code},
                 success=False,
                 output_text="",
                 error_text="Docker is not installed or not available on PATH.",
@@ -117,7 +127,7 @@ class DockerPythonExecutor:
         except subprocess.TimeoutExpired:
             return ToolResult(
                 tool_name="python",
-                tool_input=normalized_code,
+                tool_input={"code": normalized_code},
                 success=False,
                 output_text="",
                 error_text=(
@@ -127,7 +137,7 @@ class DockerPythonExecutor:
         except Exception as exc:
             return ToolResult(
                 tool_name="python",
-                tool_input=normalized_code,
+                tool_input={"code": normalized_code},
                 success=False,
                 output_text="",
                 error_text=f"{type(exc).__name__}: {exc}",
@@ -135,7 +145,7 @@ class DockerPythonExecutor:
 
         output_text = completed.stdout.strip()
         error_text = completed.stderr.strip()
-        success = completed.returncode == 0
+        success = (completed.returncode == 0)
 
         if not output_text:
             output_text = "(no stdout)"
@@ -144,7 +154,7 @@ class DockerPythonExecutor:
 
         return ToolResult(
             tool_name="python",
-            tool_input=normalized_code,
+            tool_input={"code": normalized_code},
             success=success,
             output_text=output_text,
             error_text=error_text,

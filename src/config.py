@@ -43,7 +43,6 @@ class PathConfig:
     """Filesystem locations used by the repository."""
 
     root_dir: Path
-    prompt_dir: Path
     trace_dir: Path
     session_dir: Path
 
@@ -90,7 +89,6 @@ class AgentConfig:
         snapshot = asdict(self)
         snapshot["llm"]["api_key_file"] = str(self.llm.api_key_file)
         snapshot["paths"]["root_dir"] = str(self.paths.root_dir)
-        snapshot["paths"]["prompt_dir"] = str(self.paths.prompt_dir)
         snapshot["paths"]["trace_dir"] = str(self.paths.trace_dir)
         snapshot["paths"]["session_dir"] = str(self.paths.session_dir)
         return snapshot
@@ -205,7 +203,6 @@ def load_agent_config(config_path: str | Path = "config.yaml") -> AgentConfig:
 
     paths = PathConfig(
         root_dir=root_dir,
-        prompt_dir=(root_dir / paths_raw.get("prompt_dir", "prompts")).resolve(),
         trace_dir=(root_dir / paths_raw.get("trace_dir", "traces")).resolve(),
         session_dir=(root_dir / paths_raw.get("session_dir", "sessions")).resolve(),
     )

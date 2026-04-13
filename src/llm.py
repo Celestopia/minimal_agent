@@ -36,17 +36,25 @@ class DeepSeekChatClient:
 
         self._client = OpenAI(api_key=api_key, base_url=config.base_url)
 
-    def generate(self, messages: list[dict[str, str]]) -> ModelResponse:
+    def generate(
+        self,
+        messages: list[dict[str, Any]],
+    ) -> ModelResponse:
         """Generate one next-step completion from a full chat message list."""
 
-        response = self._client.chat.completions.create(
-            model=self.config.model,
-            temperature=self.config.temperature,
-            timeout=self.config.timeout_seconds,
-            messages=messages,
-        )
+        request_payload: dict[str, Any] = {
+            "model": self.config.model,
+            "temperature": self.config.temperature,
+            "timeout": self.config.timeout_seconds,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+        }
 
-        message = response.choices[0].message.content or ""
+        response = self._client.chat.completions.create(**request_payload)
+
+        message = response.choices[0].message
+        message_text = message.content or ""
+
         usage = {}
         if getattr(response, "usage", None) is not None:
             usage = {
@@ -55,4 +63,8 @@ class DeepSeekChatClient:
                 "total_tokens": getattr(response.usage, "total_tokens", None),
             }
 
-        return ModelResponse(text=message, model=response.model, usage=usage)
+        return ModelResponse(
+            text=message_text,
+            model=response.model,
+            usage=usage,
+        )

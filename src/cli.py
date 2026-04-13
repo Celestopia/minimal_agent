@@ -25,31 +25,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # Chat function
     chat_parser = subparsers.add_parser(
         "chat", help="Start an interactive multi-turn session."
     )
     chat_parser.add_argument(
         "--session-id",
+        "-S",
         default=None,
         help="Resume or create a named session. If omitted, a fresh session is created.",
     )
 
-    ask_parser = subparsers.add_parser(
-        "ask", help="Run one user message inside a session and print the answer."
-    )
-    ask_parser.add_argument("message", help="The user message to send to the agent.")
-    ask_parser.add_argument(
-        "--session-id",
-        default="default",
-        help="Session identifier used for sliding-window memory across invocations.",
-    )
-
+    # Trace formatting function
     format_parser = subparsers.add_parser(
         "format-trace", help="Render one JSONL trace into plain text."
     )
     format_parser.add_argument("trace_path", help="Path to a JSONL trace file.")
     format_parser.add_argument(
         "--output",
+        "-O",
         default=None,
         help="Optional output file path. If omitted, the report is printed to stdout.",
     )
@@ -66,7 +60,7 @@ def run_chat(agent: ReActAgent, session_id: str | None) -> int:
 
     while True:
         try:
-            user_message = input("\nYou> ").strip()
+            user_message = input("\nUser> ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nExiting chat.")
             return 0
@@ -77,25 +71,15 @@ def run_chat(agent: ReActAgent, session_id: str | None) -> int:
             print("Exiting chat.")
             return 0
         if user_message == "/session":
-            print(f"Active session: {session.session_id}")
+            print(f"Current session: {session.session_id}")
             continue
         if user_message == "/history":
+            print("Chat history printed below.")
             print(session.render_sliding_window(agent.config.agent.sliding_window_turns))
             continue
 
-        answer, trace_path = agent.answer(session, user_message)
+        answer = agent.answer(session, user_message)
         print(f"\nAgent> {answer}")
-        print(f"Trace: {trace_path}")
-
-
-def run_ask(agent: ReActAgent, session_id: str, message: str) -> int:
-    """Run one non-interactive user turn."""
-
-    session = agent.load_or_create_session(session_id)
-    answer, trace_path = agent.answer(session, message)
-    print(answer)
-    print(f"Trace: {trace_path}")
-    return 0
 
 
 def run_format_trace(trace_path: str, output_path: str | None) -> int:
@@ -108,7 +92,7 @@ def run_format_trace(trace_path: str, output_path: str | None) -> int:
 
     target = Path(output_path).expanduser().resolve()
     target.write_text(rendered, encoding="utf-8")
-    print(f"Wrote formatted trace to {target}")
+    print(f"Wrote formatted trace to {target!r}.")
     return 0
 
 
@@ -126,8 +110,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "chat":
         return run_chat(agent, args.session_id)
-    if args.command == "ask":
-        return run_ask(agent, args.session_id, args.message)
 
     parser.error(f"Unknown command: {args.command}")
     return 2
