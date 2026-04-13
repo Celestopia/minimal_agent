@@ -1,4 +1,74 @@
-"""Core ReAct agent loop."""
+"""Core ReAct agent loop.
+
+## Terminology
+
+- "session": the whole conversation between the agent and the user;
+- "turn": a single interaction between the agent and the user;
+- "step": an atomic step performed by the agent, such as a tool call or
+  a model response.
+
+Each session contains multiple turns, and each turn contains multiple steps.
+
+
+## LLM Query Construction
+
+For one user turn, each LLM request is built from four layers:
+
+1. One invariant ``system`` message containing the global agent instructions.
+2. A sliding window of prior persisted conversation turns, represented as
+  interleaved ``user`` and ``assistant`` messages.
+3. One ``user`` message for the current turn's prompt.
+4. ``react_messages``, which is the temporary per-turn ReAct transcript.
+
+Here, ``react_messages`` is the key short-term working state for the current
+query. It is separate from persisted session history. During a multi-step turn,
+it accumulates the intermediate messages that should be visible to the model on
+the next step, for example:
+
+- the assistant's previous JSON ReAct step
+- the observation produced after running a tool
+- corrective feedback after malformed output
+- retry feedback after API or tool failures
+
+So the model sees a message list like:
+
+- ``system``: global instructions
+- prior ``user`` / ``assistant`` session turns
+- ``user``: current question
+- zero or more temporary ReAct messages from the current turn
+
+Only the final user message and final assistant answer are persisted as normal
+session history. The intermediate ReAct trajectory remains ephemeral in memory
+for the turn itself, while the detailed step-by-step record is preserved in the
+JSONL trace for debugging and analysis.
+
+
+## LLM Response
+
+The model must answer each step with one JSON object containing:
+
+- ``thought``
+- ``thought_summary``
+- ``status``
+- ``action``
+- ``action_input``
+- ``final_answer``
+
+The runtime then interprets that JSON as one next ReAct step:
+
+- ``status == "tool_call"``
+  Execute the requested local tool, turn the tool result into a structured
+  observation, append the assistant step plus the observation into
+  ``react_messages``, and call the model again with the expanded message list.
+- ``status == "final"``
+  Stop the loop and return ``final_answer`` as the assistant reply for the
+  current user turn.
+
+Failures are also converted into messages inside ``react_messages`` so the
+model can recover within the same turn rather than losing context. This
+includes malformed JSON output, LLM API errors, unknown tools, and tool
+execution failures.
+"""
 
 from __future__ import annotations
 

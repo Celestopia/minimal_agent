@@ -1,9 +1,4 @@
-"""Centralized prompt definitions and rendering helpers.
-
-This project now keeps its prompt texts in Python rather than in separate
-template files. That makes the prompt protocol live alongside the rest of the
-runtime logic and avoids an extra top-level `prompts/` directory.
-"""
+"""Centralized prompt definitions and rendering helpers."""
 
 from __future__ import annotations
 

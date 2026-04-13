@@ -1,9 +1,4 @@
-"""Conversation memory and session persistence.
-
-The agent keeps state across multiple user turns by storing session history in
-JSON and feeding only the most recent turns back into the prompt. This is a
-simple sliding-window memory strategy, which matches the requested design.
-"""
+"""Conversation memory and session persistence."""
 
 from __future__ import annotations
 
