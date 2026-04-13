@@ -4,12 +4,12 @@ llm:
   base_url: https://api.deepseek.com
   model: deepseek-chat
   temperature: 0.0
-  timeout_seconds: 90
+  timeout_seconds: 30
 
 agent:
   max_steps_per_query: 10
   max_repeated_failures: 5
-  sliding_window_turns: 6
+  sliding_window_turns: 10
 
 paths:
   trace_dir: traces
